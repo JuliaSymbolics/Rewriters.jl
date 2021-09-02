@@ -1,6 +1,6 @@
-name = "Rewriters"
+name = "RewriterCombinators"
 uuid = "1df27592-1edd-4a6d-9e16-9f1b005f54b8"
-authors = ["Alessandro <none>"]
+authors = ["Shashi Gowda <gowda@mit.edu>", "Alessandro Cheli <sudo-woodo3@protonmail.com>"]
 version = "0.1.0"
 
 [deps]
@@ -10,3 +10,4 @@ TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
 [compat]
 TermInterface = "0.1.8"
 TimerOutputs = "0.5"
+julia = "1.3"

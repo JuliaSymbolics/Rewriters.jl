@@ -28,7 +28,7 @@ rewriters.
    return `x` otherwise will return `rw(x)`.
 
 """
-module Rewriters
+module RewriterCombinators
 include("timer.jl")
 using TermInterface: is_operation, istree, operation, similarterm, arguments, node_count
 

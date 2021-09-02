@@ -1,4 +1,4 @@
-# Rewriters.jl
+# RewriterCombinators.jl
 
 This package contains definitions for common combinators that are useful for symbolic expression rewriting.
 Its purpose is to provide a shared library of combinators between various symbolic programming Julia packages, for example 
