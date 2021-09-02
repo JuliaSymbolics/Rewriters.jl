@@ -24,3 +24,6 @@ else
     macro iftimer(expr)
     end
 end
+
+export timer 
+export iftimer
