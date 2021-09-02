@@ -1,4 +1,4 @@
-# RewriterCombinators.jl
+# Rewriters.jl
 
 This package contains definitions for common combinators that are useful for symbolic expression rewriting.
 Its purpose is to provide a shared library of combinators between various symbolic programming Julia packages, for example 
@@ -10,7 +10,7 @@ A rewriter is any function which takes an expression and returns an expression
 or `nothing`. If `nothing` is returned that means there was no changes applicable
 to the input expression.
 
-The `SymbolicUtils.Rewriters` module contains some types which create and transform
+The `Rewriters` module contains some types which create and transform
 rewriters.
 
 - `Empty()` is a rewriter which always returns `nothing`

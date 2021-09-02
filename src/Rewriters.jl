@@ -3,7 +3,7 @@ A rewriter is any function which takes an expression and returns an expression
 or `nothing`. If `nothing` is returned that means there was no changes applicable
 to the input expression.
 
-The `SymbolicUtils.Rewriters` module contains some types which create and transform
+The `Rewriters` module contains some types which create and transform
 rewriters.
 
 - `Empty()` is a rewriter which always returns `nothing`
@@ -28,7 +28,7 @@ rewriters.
    return `x` otherwise will return `rw(x)`.
 
 """
-module RewriterCombinators
+module Rewriters
 include("timer.jl")
 using TermInterface: is_operation, istree, operation, similarterm, arguments, node_count
 

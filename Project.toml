@@ -1,4 +1,4 @@
-name = "RewriterCombinators"
+name = "Rewriters"
 uuid = "1df27592-1edd-4a6d-9e16-9f1b005f54b8"
 authors = ["Shashi Gowda <gowda@mit.edu>", "Alessandro Cheli <sudo-woodo3@protonmail.com>"]
 version = "0.1.0"
