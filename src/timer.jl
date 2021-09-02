@@ -25,5 +25,5 @@ else
     end
 end
 
-export timer 
-export iftimer
+export @timer 
+export @iftimer
