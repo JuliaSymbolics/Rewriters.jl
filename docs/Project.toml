@@ -1,0 +1,10 @@
+[deps]
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+Rewriters = "1df27592-1edd-4a6d-9e16-9f1b005f54b8"
+
+[compat]
+Documenter = "1"
+Rewriters = "0.1"
+
+[sources.Rewriters]
+path = ".."
