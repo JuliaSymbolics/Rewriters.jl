@@ -13,7 +13,7 @@ rewriters.
 - `RestartedChain(itr)` like `Chain(itr)` but restarts from the first rewriter once on the
    first successful application of one of the chained rewriters.
 - `IfElse(cond, rw1, rw2)` runs the `cond` function on the input, applies `rw1` if cond
-   returns true, `rw2` if it retuns false
+   returns true, `rw2` if it returns false
 - `If(cond, rw)` is the same as `IfElse(cond, rw, Empty())`
 - `Prewalk(rw; threaded=false, thread_cutoff=100)` returns a rewriter which does a pre-order
    traversal of a given expression and applies the rewriter `rw`. Note that if
@@ -39,6 +39,21 @@ export Empty, IfElse, If, Chain, RestartedChain, Fixpoint, Postwalk, Prewalk, Pa
 const repr_cache = IdDict()
 cached_repr(x) = Base.get!(()->repr(x), repr_cache, x)
 
+"""
+    Empty()
+
+A rewriter that always returns `nothing`.
+
+Rewriters use `nothing` to indicate that they did not change their input. Use
+`PassThrough(Empty())` when a no-op rewriter should instead return its input.
+
+# Examples
+
+```julia
+julia> Empty()(:x)
+nothing
+```
+"""
 struct Empty end
 
 (rw::Empty)(x) = nothing
@@ -46,6 +61,30 @@ struct Empty end
 instrument(x, f) = f(x)
 instrument(x::Empty, f) = x
 
+"""
+    IfElse(cond, yes, no)
+
+Select between two rewriters using a predicate.
+
+# Arguments
+
+- `cond`: A callable object. It is evaluated as `cond(x)`.
+- `yes`: Rewriter applied when `cond(x)` is `true`.
+- `no`: Rewriter applied when `cond(x)` is `false`.
+
+The selected rewriter receives the original input. Each branch must follow the
+rewriter contract and return either a rewritten value or `nothing`.
+
+# Examples
+
+```julia
+julia> rw = IfElse(iseven, x -> x + 1, x -> nothing);
+julia> rw(2)
+3
+julia> rw(3)
+nothing
+```
+"""
 struct IfElse{F, A, B}
     cond::F
     yes::A
@@ -58,8 +97,40 @@ function (rw::IfElse)(x)
     rw.cond(x) ?  rw.yes(x) : rw.no(x)
 end
 
+"""
+    If(cond, rw)
+
+Construct an [`IfElse`](@ref) that applies `rw` when `cond` is true and
+otherwise reports no change with [`Empty`](@ref).
+
+# Arguments
+
+- `cond`: Callable predicate evaluated as `cond(x)`.
+- `rw`: Rewriter applied when the predicate is true.
+"""
 If(f, x) = IfElse(f, x, Empty())
 
+"""
+    Chain(rws)
+
+Apply an iterable of rewriters in order.
+
+The output of each rewriter becomes the input to the next one. A `nothing`
+result means that the current input is retained and the chain continues.
+Consequently, `Chain` returns its input when every rewriter reports no change.
+
+# Arguments
+
+- `rws`: Iterable of callable rewriters.
+
+# Examples
+
+```julia
+julia> rw = Chain((x -> x + 1, x -> 2x));
+julia> rw(1)
+4
+```
+"""
 struct Chain
     rws
 end
@@ -76,6 +147,21 @@ end
 
 instrument(c::Chain, f) = Chain(map(x->instrument(x,f), c.rws))
 
+"""
+    RestartedChain(rws)
+
+Apply an iterable of rewriters and restart from the first rewriter after the
+first successful rewrite.
+
+Unlike [`Chain`](@ref), a successful rewrite returns to the beginning of the
+sequence. The resulting chain therefore keeps applying earlier rules after a
+later rule changes the input. If no rewriter changes the input, the original
+input is returned.
+
+# Arguments
+
+- `rws`: Iterable of callable rewriters.
+"""
 struct RestartedChain{Cs}
     rws::Cs
 end
@@ -105,6 +191,28 @@ end
         return x
     end
 end
+"""
+    Fixpoint(rw)
+
+Repeatedly apply `rw` until it reports no change or returns a value equal to the
+previous value.
+
+The fixpoint loop treats `nothing` as no change and returns the most recent
+input. Rewriters that alternate between distinct values do not converge and
+will continue until their own logic reaches a fixed point.
+
+# Arguments
+
+- `rw`: Callable rewriter.
+
+# Examples
+
+```julia
+julia> rw = Fixpoint(x -> x < 4 ? x + 1 : nothing);
+julia> rw(1)
+4
+```
+"""
 struct Fixpoint{C}
     rw::C
 end
@@ -137,14 +245,75 @@ end
 
 using .Threads
 
+"""
+    Postwalk(rw; threaded=false, thread_cutoff=100, similarterm=similarterm)
+
+Construct a rewriter that traverses a term bottom-up and applies `rw` after
+rewriting the children.
+
+# Arguments
+
+- `rw`: Callable rewriter applied to every visited node.
+
+# Keyword Arguments
+
+- `threaded`: When `true`, traverse sufficiently large child subtrees using
+  tasks.
+- `thread_cutoff`: Minimum `TermInterface.node_count`
+  for spawning a child task.
+- `similarterm`: Function used to rebuild a node from its operation and
+  rewritten arguments. It defaults to the imported TermInterface method.
+
+If `rw(node)` returns `nothing`, the node is retained while traversal proceeds.
+The returned rewriter itself follows the same `nothing` convention at leaves.
+"""
 function Postwalk(rw; threaded::Bool=false, thread_cutoff=100, similarterm=similarterm)
     Walk{:post, typeof(rw), typeof(similarterm), threaded}(rw, thread_cutoff, similarterm)
 end
 
+"""
+    Prewalk(rw; threaded=false, thread_cutoff=100, similarterm=similarterm)
+
+Construct a rewriter that traverses a term top-down and applies `rw` before
+rewriting the children.
+
+# Arguments
+
+- `rw`: Callable rewriter applied to every visited node.
+
+# Keyword Arguments
+
+- `threaded`: When `true`, traverse sufficiently large child subtrees using
+  tasks.
+- `thread_cutoff`: Minimum `TermInterface.node_count`
+  for spawning a child task.
+- `similarterm`: Function used to rebuild a node from its operation and
+  rewritten arguments.
+
+Use `PassThrough(rw)` internally when a traversal must preserve a node after a
+child rewriter reports `nothing`.
+"""
 function Prewalk(rw; threaded::Bool=false, thread_cutoff=100, similarterm=similarterm)
     Walk{:pre, typeof(rw), typeof(similarterm), threaded}(rw, thread_cutoff, similarterm)
 end
 
+"""
+    PassThrough(rw)
+
+Wrap a rewriter so that it returns its input when the wrapped rewriter returns
+`nothing`.
+
+# Arguments
+
+- `rw`: Callable rewriter.
+
+# Examples
+
+```julia
+julia> PassThrough(Empty())(:x)
+:x
+```
+"""
 struct PassThrough{C}
     rw::C
 end
