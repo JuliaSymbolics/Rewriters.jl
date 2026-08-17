@@ -30,7 +30,8 @@ rewriters.
 """
 module Rewriters
 include("timer.jl")
-using TermInterface
+import TermInterface: arguments, istree, node_count, operation, similarterm,
+    unsorted_arguments
 
 export Empty, IfElse, If, Chain, RestartedChain, Fixpoint, Postwalk, Prewalk, PassThrough
 
@@ -179,7 +180,7 @@ end
 
 @generated function (rw::RestartedChain{<:NTuple{N,Any}})(x) where N
     quote
-        Base.@nexprs $N i->begin
+        for i in 1:$N
             let f = rw.rws[i]
                 y = @timer cached_repr(repr(f)) f(x)
                 if y !== nothing

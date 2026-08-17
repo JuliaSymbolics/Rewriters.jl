@@ -2,7 +2,7 @@ const TIMER_OUTPUTS = true
 const being_timed = Ref{Bool}(false)
 
 if TIMER_OUTPUTS
-    using TimerOutputs
+    import TimerOutputs: @timeit
 
     """
         @timer name expr
