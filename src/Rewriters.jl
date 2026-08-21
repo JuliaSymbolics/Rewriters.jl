@@ -31,6 +31,7 @@ rewriters.
 module Rewriters
 include("timer.jl")
 using TermInterface
+using PrecompileTools: @compile_workload, @setup_workload
 
 export Empty, IfElse, If, Chain, RestartedChain, Fixpoint, Postwalk, Prewalk, PassThrough
 
@@ -204,5 +205,6 @@ function instrument_io(x)
     instrument(x, io_instrumenter)
 end
 
-end # end module
+include("precompile.jl")
 
+end # end module
