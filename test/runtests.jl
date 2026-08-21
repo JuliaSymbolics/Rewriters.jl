@@ -15,7 +15,7 @@ TermInterface.operation(x::TestNode) = x.operation
 TermInterface.arguments(x::TestNode) = x.arguments
 TermInterface.similarterm(::TestNode, operation, arguments; kwargs...) =
     TestNode(operation, Any[arguments...])
-TermInterface.node_count(x::TestNode) = 1 + sum(node_count, x.arguments; init=0)
+TermInterface.node_count(x::TestNode) = 1 + sum(node_count, x.arguments; init = 0)
 
 @testset "Rewriter contracts" begin
     @test Empty()(:x) === nothing
@@ -27,8 +27,12 @@ TermInterface.node_count(x::TestNode) = 1 + sum(node_count, x.arguments; init=0)
     @test Chain((x -> x + 1, Empty(), x -> 2x))(1) == 4
     @test Chain((Empty(), Empty()))(:x) === :x
 
-    restarted = RestartedChain((x -> x == 1 ? 2 : nothing,
-        x -> x == 2 ? 3 : nothing))
+    restarted = RestartedChain(
+        (
+            x -> x == 1 ? 2 : nothing,
+            x -> x == 2 ? 3 : nothing,
+        )
+    )
     @test restarted(1) == 3
     @test Fixpoint(x -> x < 3 ? x + 1 : nothing)(1) == 3
 

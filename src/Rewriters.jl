@@ -38,7 +38,7 @@ export Empty, IfElse, If, Chain, RestartedChain, Fixpoint, Postwalk, Prewalk, Pa
 
 # Cache of printed rules to speed up @timer
 const repr_cache = IdDict()
-cached_repr(x) = Base.get!(()->repr(x), repr_cache, x)
+cached_repr(x) = Base.get!(() -> repr(x), repr_cache, x)
 
 """
     Empty()
@@ -95,7 +95,7 @@ end
 instrument(x::IfElse, f) = IfElse(x.cond, instrument(x.yes, f), instrument(x.no, f))
 
 function (rw::IfElse)(x)
-    rw.cond(x) ?  rw.yes(x) : rw.no(x)
+    return rw.cond(x) ? rw.yes(x) : rw.no(x)
 end
 
 """
@@ -146,7 +146,7 @@ function (rw::Chain)(x)
     return x
 end
 
-instrument(c::Chain, f) = Chain(map(x->instrument(x,f), c.rws))
+instrument(c::Chain, f) = Chain(map(x -> instrument(x, f), c.rws))
 
 """
     RestartedChain(rws)
@@ -167,7 +167,7 @@ struct RestartedChain{Cs}
     rws::Cs
 end
 
-instrument(c::RestartedChain, f) = RestartedChain(map(x->instrument(x,f), c.rws))
+instrument(c::RestartedChain, f) = RestartedChain(map(x -> instrument(x, f), c.rws))
 
 function (rw::RestartedChain)(x)
     for f in rw.rws
@@ -179,9 +179,9 @@ function (rw::RestartedChain)(x)
     return x
 end
 
-@generated function (rw::RestartedChain{<:NTuple{N,Any}})(x) where N
-    quote
-        for i in 1:$N
+@generated function (rw::RestartedChain{<:NTuple{N, Any}})(x) where {N}
+    return quote
+        Base.@nexprs $N i -> begin
             let f = rw.rws[i]
                 y = @timer cached_repr(repr(f)) f(x)
                 if y !== nothing
@@ -237,11 +237,13 @@ struct Walk{ord, C, F, threaded}
     similarterm::F
 end
 
-function instrument(x::Walk{ord, C,F,threaded}, f) where {ord,C,F,threaded}
+function instrument(x::Walk{ord, C, F, threaded}, f) where {ord, C, F, threaded}
     irw = instrument(x.rw, f)
-    Walk{ord, typeof(irw), typeof(x.similarterm), threaded}(irw,
-                                                            x.thread_cutoff,
-                                                            x.similarterm)
+    return Walk{ord, typeof(irw), typeof(x.similarterm), threaded}(
+        irw,
+        x.thread_cutoff,
+        x.similarterm
+    )
 end
 
 using .Threads
@@ -268,8 +270,8 @@ rewriting the children.
 If `rw(node)` returns `nothing`, the node is retained while traversal proceeds.
 The returned rewriter itself follows the same `nothing` convention at leaves.
 """
-function Postwalk(rw; threaded::Bool=false, thread_cutoff=100, similarterm=similarterm)
-    Walk{:post, typeof(rw), typeof(similarterm), threaded}(rw, thread_cutoff, similarterm)
+function Postwalk(rw; threaded::Bool = false, thread_cutoff = 100, similarterm = similarterm)
+    return Walk{:post, typeof(rw), typeof(similarterm), threaded}(rw, thread_cutoff, similarterm)
 end
 
 """
@@ -294,8 +296,8 @@ rewriting the children.
 Use `PassThrough(rw)` internally when a traversal must preserve a node after a
 child rewriter reports `nothing`.
 """
-function Prewalk(rw; threaded::Bool=false, thread_cutoff=100, similarterm=similarterm)
-    Walk{:pre, typeof(rw), typeof(similarterm), threaded}(rw, thread_cutoff, similarterm)
+function Prewalk(rw; threaded::Bool = false, thread_cutoff = 100, similarterm = similarterm)
+    return Walk{:pre, typeof(rw), typeof(similarterm), threaded}(rw, thread_cutoff, similarterm)
 end
 
 """
@@ -320,7 +322,7 @@ struct PassThrough{C}
 end
 instrument(x::PassThrough, f) = PassThrough(instrument(x.rw, f))
 
-(p::PassThrough)(x) = (y=p.rw(x); y === nothing ? x : y)
+(p::PassThrough)(x) = (y = p.rw(x); y === nothing ? x : y)
 
 passthrough(x, default) = x === nothing ? default : x
 function (p::Walk{ord, C, F, false})(x) where {ord, C, F}
@@ -352,7 +354,7 @@ function (p::Walk{ord, C, F, true})(x) where {ord, C, F}
                     p(arg)
                 end
             end
-            args = map((t,a) -> passthrough(t isa Task ? fetch(t) : t, a), _args, arguments(x))
+            args = map((t, a) -> passthrough(t isa Task ? fetch(t) : t, a), _args, arguments(x))
             t = p.similarterm(x, operation(x), args)
         end
         return ord === :post ? p.rw(t) : t
@@ -363,16 +365,16 @@ end
 
 function instrument_io(x)
     function io_instrumenter(r)
-        function (args...)
+        return function (args...)
             println("Rule: ", r)
             println("Input: ", args)
             res = r(args...)
             println("Output: ", res)
-            res
+            return res
         end
     end
 
-    instrument(x, io_instrumenter)
+    return instrument(x, io_instrumenter)
 end
 
 include("precompile.jl")
