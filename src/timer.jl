@@ -2,7 +2,14 @@ const TIMER_OUTPUTS = true
 const being_timed = Ref{Bool}(false)
 
 if TIMER_OUTPUTS
-    import TimerOutputs: @timeit
+    import TimerOutputs: timeit
+
+    struct TimerCall{F, A}
+        f::F
+        args::A
+    end
+
+    (call::TimerCall)() = call.f(call.args...)
 
     """
         @timer name expr
@@ -15,9 +22,16 @@ if TIMER_OUTPUTS
     not change the rewriter contract.
     """
     macro timer(name, expr)
+        timed_expr = if expr isa Expr && expr.head === :call
+            f = expr.args[1]
+            args = Expr(:tuple, map(esc, expr.args[2:end])...)
+            :(timeit(TimerCall($(esc(f)), $args), $(esc(name))))
+        else
+            :(timeit(() -> $(esc(expr)), $(esc(name))))
+        end
         return :(
             if being_timed[]
-                @timeit $(esc(name)) $(esc(expr))
+                $timed_expr
             else
                 $(esc(expr))
             end

@@ -182,11 +182,10 @@ end
 @generated function (rw::RestartedChain{<:NTuple{N, Any}})(x) where {N}
     return quote
         Base.@nexprs $N i -> begin
-            let f = rw.rws[i]
-                y = @timer cached_repr(repr(f)) f(x)
-                if y !== nothing
-                    return Chain(rw.rws)(y)
-                end
+            f = rw.rws[i]
+            y = @timer cached_repr(repr(f)) f(x)
+            if y !== nothing
+                return Chain(rw.rws)(y)
             end
         end
         return x
@@ -346,6 +345,7 @@ function (p::Walk{ord, C, F, true})(x) where {ord, C, F}
         if ord === :pre
             x = p.rw(x)
         end
+        t = x
         if istree(x)
             _args = map(arguments(x)) do arg
                 if node_count(arg) > p.thread_cutoff

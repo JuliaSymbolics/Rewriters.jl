@@ -43,6 +43,8 @@ TermInterface.node_count(x::TestNode) = 1 + sum(node_count, x.arguments; init = 
     @test Postwalk(replace_one)(tree) ==
         TestNode(:+, Any[TestNode(:*, Any[10, 2]), 3])
 
+    @test Prewalk(x -> x === tree ? :leaf : nothing; threaded = true)(tree) === :leaf
+
     seen = Any[]
     recording = PassThrough(x -> (push!(seen, x); nothing))
     Postwalk(recording)(tree)
