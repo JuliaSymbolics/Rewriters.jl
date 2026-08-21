@@ -1,32 +1,25 @@
 """
-A rewriter is any function which takes an expression and returns an expression
-or `nothing`. If `nothing` is returned that means there was no changes applicable
-to the input expression.
+    Rewriters
 
-The `Rewriters` module contains some types which create and transform
-rewriters.
+Tools for composing rewriters over scalar values and expression trees.
 
-- `Empty()` is a rewriter which always returns `nothing`
-- `Chain(itr)` chain an iterator of rewriters into a single rewriter which applies
-   each chained rewriter in the given order.
-   If a rewriter returns `nothing` this is treated as a no-change.
-- `RestartedChain(itr)` like `Chain(itr)` but restarts from the first rewriter once on the
-   first successful application of one of the chained rewriters.
-- `IfElse(cond, rw1, rw2)` runs the `cond` function on the input, applies `rw1` if cond
-   returns true, `rw2` if it returns false
-- `If(cond, rw)` is the same as `IfElse(cond, rw, Empty())`
-- `Prewalk(rw; threaded=false, thread_cutoff=100)` returns a rewriter which does a pre-order
-   traversal of a given expression and applies the rewriter `rw`. Note that if
-   `rw` returns `nothing` when a match is not found, then `Prewalk(rw)` will
-   also return nothing unless a match is found at every level of the walk.
-   `threaded=true` will use multi threading for traversal. `thread_cutoff` is
-   the minimum number of nodes in a subtree which should be walked in a
-   threaded spawn.
-- `Postwalk(rw; threaded=false, thread_cutoff=100)` similarly does post-order traversal.
-- `Fixpoint(rw)` returns a rewriter which applies `rw` repeatedly until there are no changes to be made.
-- `PassThrough(rw)` returns a rewriter which if `rw(x)` returns `nothing` will instead
-   return `x` otherwise will return `rw(x)`.
+A rewriter is a callable object that accepts one input and returns either a
+rewritten value or `nothing`. Returning `nothing` means that the rewriter did
+not apply. A caller that needs a total transformation can wrap a rewriter in
+[`PassThrough`](@ref), which retains the input when the wrapped rewriter does
+not apply.
 
+The traversal constructors [`Prewalk`](@ref) and [`Postwalk`](@ref) use the
+`TermInterface` tree interface. A tree node must satisfy `istree(x)`, expose
+an `operation(x)` and `arguments(x)`, and be reconstructible with
+`similarterm(x, operation, arguments)`. A rewriter passed to a traversal is
+called at every visited node. The prewalk applies it before visiting children;
+the postwalk applies it after visiting children.
+
+The exported constructors are ordinary Julia functions and callable structs,
+so they can be composed without depending on any package-specific expression
+type. The Rewriter Interface page documents the complete contract and generic
+examples.
 """
 module Rewriters
 include("timer.jl")
@@ -47,6 +40,10 @@ A rewriter that always returns `nothing`.
 
 Rewriters use `nothing` to indicate that they did not change their input. Use
 `PassThrough(Empty())` when a no-op rewriter should instead return its input.
+
+# Returns
+
+`nothing` for every input.
 
 # Examples
 
@@ -76,6 +73,11 @@ Select between two rewriters using a predicate.
 The selected rewriter receives the original input. Each branch must follow the
 rewriter contract and return either a rewritten value or `nothing`.
 
+# Returns
+
+The result returned by `yes(x)` when `cond(x)` is `true`, otherwise the result
+returned by `no(x)`.
+
 # Examples
 
 ```julia
@@ -87,8 +89,11 @@ nothing
 ```
 """
 struct IfElse{F, A, B}
+    """Predicate used to select a branch."""
     cond::F
+    """Rewriter used when `cond(x)` is `true`."""
     yes::A
+    """Rewriter used when `cond(x)` is `false`."""
     no::B
 end
 
@@ -108,6 +113,11 @@ otherwise reports no change with [`Empty`](@ref).
 
 - `cond`: Callable predicate evaluated as `cond(x)`.
 - `rw`: Rewriter applied when the predicate is true.
+
+# Returns
+
+An [`IfElse`](@ref) that uses `rw` as its true branch and [`Empty`](@ref) as its
+false branch.
 """
 If(f, x) = IfElse(f, x, Empty())
 
@@ -124,6 +134,16 @@ Consequently, `Chain` returns its input when every rewriter reports no change.
 
 - `rws`: Iterable of callable rewriters.
 
+# Fields
+
+- `rws`: The iterable of rewriters, retained as supplied by the caller.
+
+# Returns
+
+A callable `Chain` object. For input `x`, each rewriter is called with the
+current value. A `nothing` result leaves the current value unchanged, and the
+final current value is returned.
+
 # Examples
 
 ```julia
@@ -133,6 +153,7 @@ julia> rw(1)
 ```
 """
 struct Chain
+    """Iterable of callable rewriters applied from left to right."""
     rws
 end
 
@@ -162,8 +183,15 @@ input is returned.
 # Arguments
 
 - `rws`: Iterable of callable rewriters.
+
+# Returns
+
+A callable `RestartedChain` object. It returns the value after the first
+successful rewrite and one subsequent pass through the complete sequence, or
+the original input when no rewriter applies.
 """
 struct RestartedChain{Cs}
+    """Iterable of callable rewriters applied in sequence."""
     rws::Cs
 end
 
@@ -180,16 +208,16 @@ function (rw::RestartedChain)(x)
 end
 
 @generated function (rw::RestartedChain{<:NTuple{N, Any}})(x) where {N}
-    return quote
-        Base.@nexprs $N i -> begin
-            f = rw.rws[i]
-            y = @timer cached_repr(repr(f)) f(x)
-            if y !== nothing
-                return Chain(rw.rws)(y)
+    steps = [
+        quote
+                f = rw.rws[$i]
+                y = @timer cached_repr(repr(f)) f(x)
+                if y !== nothing
+                    return Chain(rw.rws)(y)
             end
-        end
-        return x
-    end
+            end for i in 1:N
+    ]
+    return Expr(:block, steps..., :(return x))
 end
 """
     Fixpoint(rw)
@@ -205,6 +233,15 @@ will continue until their own logic reaches a fixed point.
 
 - `rw`: Callable rewriter.
 
+# Fields
+
+- `rw`: The callable rewriter repeatedly applied to the current value.
+
+# Returns
+
+A callable `Fixpoint` object. It returns the last value before a `nothing`
+result, or when two successive values compare equal with `isequal`.
+
 # Examples
 
 ```julia
@@ -214,6 +251,7 @@ julia> rw(1)
 ```
 """
 struct Fixpoint{C}
+    """Callable rewriter repeatedly applied until it reaches a fixpoint."""
     rw::C
 end
 
@@ -268,6 +306,12 @@ rewriting the children.
 
 If `rw(node)` returns `nothing`, the node is retained while traversal proceeds.
 The returned rewriter itself follows the same `nothing` convention at leaves.
+
+# Returns
+
+A callable traversal object. For a tree input, it returns the rebuilt tree or
+the result of the final rewrite at the root. For a non-tree input, it returns
+`rw(x)`.
 """
 function Postwalk(rw; threaded::Bool = false, thread_cutoff = 100, similarterm = similarterm)
     return Walk{:post, typeof(rw), typeof(similarterm), threaded}(rw, thread_cutoff, similarterm)
@@ -294,6 +338,10 @@ rewriting the children.
 
 Use `PassThrough(rw)` internally when a traversal must preserve a node after a
 child rewriter reports `nothing`.
+
+# Returns
+
+A callable traversal object with the same return convention as [`Postwalk`](@ref).
 """
 function Prewalk(rw; threaded::Bool = false, thread_cutoff = 100, similarterm = similarterm)
     return Walk{:pre, typeof(rw), typeof(similarterm), threaded}(rw, thread_cutoff, similarterm)
@@ -309,6 +357,11 @@ Wrap a rewriter so that it returns its input when the wrapped rewriter returns
 
 - `rw`: Callable rewriter.
 
+# Returns
+
+A callable `PassThrough` object. For input `x`, it returns `rw(x)` when that
+result is not `nothing`, otherwise it returns `x`.
+
 # Examples
 
 ```julia
@@ -317,6 +370,7 @@ julia> PassThrough(Empty())(:x)
 ```
 """
 struct PassThrough{C}
+    """Callable rewriter whose `nothing` result is replaced with its input."""
     rw::C
 end
 instrument(x::PassThrough, f) = PassThrough(instrument(x.rw, f))

@@ -2,9 +2,4 @@ using SciMLTesting
 using JET
 using Rewriters
 
-run_qa(
-    Rewriters;
-    ei_kwargs = (;
-        all_qualified_accesses_are_public = (; ignore = (Symbol("@nexprs"),)),
-    ),
-)
+run_qa(Rewriters)

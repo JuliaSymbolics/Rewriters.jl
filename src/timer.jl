@@ -10,18 +10,27 @@ if TIMER_OUTPUTS
     end
 
     (call::TimerCall)() = call.f(call.args...)
+end
 
-    """
-        @timer name expr
+"""
+    @timer name expr
 
-    Evaluate `expr`, recording its elapsed time under `name` when timing is
-    enabled for this package.
+Evaluate `expr`, recording its elapsed time under `name` when timer output is
+enabled for this package. When timing is disabled, `expr` is evaluated directly.
+In either mode the expression is evaluated exactly once and its value is
+returned.
 
-    The expression is evaluated exactly once and its value is returned. The
-    macro is intended for instrumentation inside rewriter pipelines; it does
-    not change the rewriter contract.
-    """
-    macro timer(name, expr)
+# Arguments
+
+- `name`: Label passed to `TimerOutputs.timeit` when timing is enabled.
+- `expr`: Expression to evaluate.
+
+# Returns
+
+The value of `expr`.
+"""
+macro timer(name, expr)
+    if TIMER_OUTPUTS
         timed_expr = if expr isa Expr && expr.head === :call
             f = expr.args[1]
             args = Expr(:tuple, map(esc, expr.args[2:end])...)
@@ -37,40 +46,26 @@ if TIMER_OUTPUTS
             end
         )
     end
-
-    """
-        @iftimer expr
-
-    Evaluate `expr` while preserving the package's timing instrumentation
-    configuration.
-    """
-    macro iftimer(expr)
-        return esc(expr)
-    end
-
-else
-    macro timer(name, expr)
-        return esc(expr)
-    end
-
-    macro iftimer(expr)
-    end
+    return esc(expr)
 end
 
-@doc """
-    @timer name expr
-
-Evaluate `expr`, recording its elapsed time under `name` when timing is
-enabled for this package. The expression is evaluated exactly once and its
-value is returned.
-""" var"@timer"
-
-@doc """
+"""
     @iftimer expr
 
 Evaluate `expr` while preserving the package's timing instrumentation
-configuration.
-""" var"@iftimer"
+configuration. This macro currently leaves the expression unchanged.
+
+# Arguments
+
+- `expr`: Expression to evaluate.
+
+# Returns
+
+The value of `expr`.
+"""
+macro iftimer(expr)
+    return esc(expr)
+end
 
 export @timer
 export @iftimer

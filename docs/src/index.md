@@ -11,4 +11,5 @@ increment = PassThrough(x -> x isa Int && x < 3 ? x + 1 : nothing)
 Fixpoint(increment)(1)
 ```
 
-See the [API reference](api.md) for the complete public interface.
+See the [rewriter interface](interfaces.md) for the generic contract and the
+[API reference](api.md) for the complete public interface.
