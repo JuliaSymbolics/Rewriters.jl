@@ -1,0 +1,9 @@
+[deps]
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+Rewriters = "1df27592-1edd-4a6d-9e16-9f1b005f54b8"
+TermInterface = "8ea1fca8-c5ef-4a55-8b96-4e9afe9c9a3c"
+
+[compat]
+Documenter = "1"
+Rewriters = "0.1"
+TermInterface = "0.2"
